@@ -1,0 +1,8 @@
+gradio
+python-dotenv
+groq
+speechrecognition
+gtts
+torch
+torchvision
+Pillow
