@@ -5,13 +5,18 @@ from voice_of_the_doctor import text_to_speech_with_gtts
 from datetime import datetime
 import os
 
-# Ensure upload and output folders exist
+# Ensure folders exist
 os.makedirs("uploads", exist_ok=True)
 os.makedirs("audio_outputs", exist_ok=True)
 
+# 🧠 Chat memory
+chat_history = []
+
 def diagnose_and_speak(symptom_text, image=None, use_voice=False):
+    global chat_history
+
     if not symptom_text and image is None:
-        return "❌ Please provide symptoms or upload an image.", None
+        return "❌ Please provide symptoms or upload an image.", None, chat_history
 
     image_path = None
     if image:
@@ -19,27 +24,32 @@ def diagnose_and_speak(symptom_text, image=None, use_voice=False):
         image_path = f"uploads/uploaded_image_{timestamp}.jpg"
         image.save(image_path)
 
-    response = get_diagnosis(symptom_text, image_path)
+    # Append user message to history
+    chat_history.append(("user", symptom_text))
+
+    # Create full prompt from history
+    full_prompt = "\n".join([f"{role}: {msg}" for role, msg in chat_history])
+    response = get_diagnosis(full_prompt, image_path)
+
+    # Append assistant response
+    chat_history.append(("assistant", response))
 
     audio_path = None
     if use_voice:
         audio_path = text_to_speech_with_gtts(response)
 
-    return response, audio_path
+    return response, audio_path, chat_history
 
 
 def append_speech_to_text(audio_path, current_text):
     if audio_path is None:
         return current_text
     speech_text = speech_to_text(audio_path)
-    if current_text:
-        return current_text + " " + speech_text
-    else:
-        return speech_text
+    return (current_text + " " + speech_text) if current_text else speech_text
 
 
-with gr.Blocks(title="Medical LLM Chatbot") as app:
-    gr.Markdown("# 🩺 Medical Diagnosis Chatbot")
+with gr.Blocks(title="🩺 Medical LLM Chatbot with Memory") as app:
+    gr.Markdown("# 🧠 Medical Diagnosis Chatbot\nNow with chat memory, voice, and image support")
 
     with gr.Row():
         with gr.Column():
@@ -60,11 +70,12 @@ with gr.Blocks(title="Medical LLM Chatbot") as app:
         with gr.Column():
             diagnosis_output = gr.Textbox(label="📋 Diagnosis Result", lines=10)
             audio_output = gr.Audio(label="🔊 Diagnosis Audio", type="filepath")
+            chat_display = gr.Chatbot(label="💬 Chat History")
 
     submit_button.click(
         fn=diagnose_and_speak,
         inputs=[text_input, image_input, voice_checkbox],
-        outputs=[diagnosis_output, audio_output],
+        outputs=[diagnosis_output, audio_output, chat_display],
         show_progress=True
     )
 
