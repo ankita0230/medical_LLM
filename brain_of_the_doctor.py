@@ -15,27 +15,36 @@ def get_diagnosis(symptoms, image_path=None):
         try:
             analysis = analyze_image(image_path)
             top_labels = ", ".join([f"{label} ({prob*100:.1f}%)" for label, prob in analysis])
-            image_desc = f"\n\nImage analysis suggests: {top_labels}."
+            image_desc = f"Image analysis shows: {top_labels}."
         except Exception as e:
-            image_desc = f"\n\n(Note: Image analysis failed: {e})"
+            image_desc = f"Image analysis failed: {e}"
 
-    prompt = f"""You are a helpful medical assistant.
-Patient reported the following symptoms: {symptoms}.{image_desc}
+    prompt_parts = []
 
-Provide:
-1. Likely illness
-2. Short description
-3. Common medicine (optional)
-4. Should patient visit a doctor?
+    if symptoms:
+        prompt_parts.append(f"The patient describes the following symptoms:\n{symptoms}")
 
-Only give medical guidance — no legal disclaimers."""
+    if image_path:
+        prompt_parts.append(f"{image_desc}")
+
+    final_prompt = "\n\n".join(prompt_parts) + """
+
+Please analyze the above patient information.
+
+If the image findings and the reported symptoms match, combine both for a better diagnosis. If they are unrelated, explain that they might refer to different conditions. Then:
+
+1. List the most likely illness.
+2. Short description.
+3. Common medicine (if any).
+4. Should the patient visit a doctor?
+"""
 
     try:
         response = client.chat.completions.create(
             model=LLM_MODEL,
             messages=[
-                {"role": "system", "content": "You are a helpful and concise medical assistant."},
-                {"role": "user", "content": prompt}
+                {"role": "system", "content": "You are a helpful and careful medical assistant."},
+                {"role": "user", "content": final_prompt}
             ]
         )
         return response.choices[0].message.content.strip()
